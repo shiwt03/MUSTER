@@ -27,7 +27,6 @@ from ..builder import BACKBONES
 from ..utils.embed import PatchEmbed, PatchMerging
 
 
-
 class WindowMSA(BaseModule):
     """Window based multi-head self-attention (W-MSA) module with relative
     position bias.
@@ -56,13 +55,12 @@ class WindowMSA(BaseModule):
                  attn_drop_rate=0.,
                  proj_drop_rate=0.,
                  init_cfg=None):
-
         super().__init__(init_cfg=init_cfg)
         self.embed_dims = embed_dims
         self.window_size = window_size  # Wh, Ww
         self.num_heads = num_heads
         head_embed_dims = embed_dims // num_heads
-        self.scale = qk_scale or head_embed_dims**-0.5
+        self.scale = qk_scale or head_embed_dims ** -0.5
 
         # define a parameter table of relative position bias
         self.relative_position_bias_table = nn.Parameter(
@@ -105,9 +103,9 @@ class WindowMSA(BaseModule):
 
         relative_position_bias = self.relative_position_bias_table[
             self.relative_position_index.view(-1)].view(
-                self.window_size[0] * self.window_size[1],
-                self.window_size[0] * self.window_size[1],
-                -1)  # Wh*Ww,Wh*Ww,nH
+            self.window_size[0] * self.window_size[1],
+            self.window_size[0] * self.window_size[1],
+            -1)  # Wh*Ww,Wh*Ww,nH
         relative_position_bias = relative_position_bias.permute(
             2, 0, 1).contiguous()  # nH, Wh*Ww, Wh*Ww
         attn = attn + relative_position_bias.unsqueeze(0)
@@ -225,7 +223,7 @@ class ShiftWindowMSA(BaseModule):
             attn_mask = mask_windows.unsqueeze(1) - mask_windows.unsqueeze(2)
             attn_mask = attn_mask.masked_fill(attn_mask != 0,
                                               float(-100.0)).masked_fill(
-                                                  attn_mask == 0, float(0.0))
+                attn_mask == 0, float(0.0))
         else:
             shifted_query = query
             attn_mask = None
@@ -233,7 +231,7 @@ class ShiftWindowMSA(BaseModule):
         # nW*B, window_size, window_size, C
         query_windows = self.window_partition(shifted_query)
         # nW*B, window_size*window_size, C
-        query_windows = query_windows.view(-1, self.window_size**2, C)
+        query_windows = query_windows.view(-1, self.window_size ** 2, C)
 
         # W-MSA/SW-MSA (nW*B, window_size*window_size, C)
         attn_windows = self.w_msa(query_windows, mask=attn_mask)
@@ -459,20 +457,19 @@ class SwinBlockSequence(BaseModule):
 
         self.is_upsample = is_upsample
         self.conv = ConvModule(
-                        in_channels=feedforward_channels,
-                        out_channels=feedforward_channels // 2,
-                        kernel_size=1,
-                        stride=1,
-                        norm_cfg=self.norm_cfg,
-                        act_cfg=self.act_cfg)
-
+            in_channels=feedforward_channels,
+            out_channels=feedforward_channels,
+            kernel_size=1,
+            stride=1,
+            norm_cfg=norm_cfg,
+            act_cfg=act_cfg)
 
     def forward(self, x, hw_shape):
         for block in self.blocks:
             x = block(x, hw_shape)
 
         if self.is_upsample:
-            up_hw_shape = [hw_shape[0]*2, hw_shape[1]*2]
+            up_hw_shape = [hw_shape[0] * 2, hw_shape[1] * 2]
             x_up = resize(
                 input=self.conv(x),
                 # size=inputs[0].shape[2:],
@@ -482,10 +479,6 @@ class SwinBlockSequence(BaseModule):
             return x_up, up_hw_shape, x, hw_shape
         else:
             return x, hw_shape, x, hw_shape
-
-
-
-
 
 
 @HEADS.register_module()
@@ -508,7 +501,7 @@ class FullSwinHead(BaseDecodeHead):
                  norm_cfg=dict(type='LN'),
                  with_cp=False,
                  init_cfg=None, **kwargs):
-        super(FullSwinHead, self).__init__(**kwargs)
+        super().__init__(input_transform='multiple_select', **kwargs)
 
         num_layers = len(depths)
 
@@ -550,20 +543,15 @@ class FullSwinHead(BaseDecodeHead):
                 init_cfg=None)
             self.stages.append(stage)
             if is_upsample:
-                in_channels = in_channels // 2
+                in_channels = in_channels
 
         self.num_features = [int(embed_dims * 2 ** i) for i in range(num_layers)]
 
-
-
-    def init_weights(self):
-        return
-
     def forward(self, inputs):
         # Receive 4 stage backbone feature map: 1/4, 1/8, 1/16, 1/32
-        x = self._transform_inputs(inputs)
+        inputs = self._transform_inputs(inputs)
+        x = inputs[0]
         hw_shape = x.shape[1:]
-
         outs = []
         for i, stage in enumerate(self.stages):
             x, hw_shape, out, out_hw_shape = stage(x, hw_shape)
