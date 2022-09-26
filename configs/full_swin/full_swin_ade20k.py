@@ -33,7 +33,7 @@ model = dict(
     decode_head=dict(
         type='FullSwinHead',
 
-        embed_dims=96,
+        embed_dims=256,
         patch_size=4,
         window_size=7,
         mlp_ratio=4,
@@ -49,7 +49,7 @@ model = dict(
         # norm_cfg=dict(type='LN'),
         with_cp=False,
         init_cfg=None,
-        in_channels=[96, 192, 384, 768],
+        in_channels=[256, 256, 256, 256],
         in_index=[0, 1, 2, 3],
         # pool_scales=(1, 2, 3, 6),
         # channels=512,

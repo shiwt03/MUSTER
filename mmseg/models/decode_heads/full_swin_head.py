@@ -1,3 +1,5 @@
+import os
+
 import torch
 import torch.nn as nn
 from mmcv.cnn import ConvModule
@@ -93,6 +95,9 @@ class WindowMSA(BaseModule):
                 Wh*Ww, Wh*Ww), value should be between (-inf, 0].
         """
         B, N, C = x.shape
+        print(x.shape)
+        print(self.embed_dims)
+        os.system("pause")
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads,
                                   C // self.num_heads).permute(2, 0, 3, 1, 4)
         # make torchscript happy (cannot use tensor as tuple)
@@ -364,6 +369,7 @@ class SwinBlock(BaseModule):
 
         def _inner_forward(x):
             identity = x
+            print(x.shape)
             x = self.norm1(x)
             x = self.attn(x, hw_shape)
 
@@ -549,9 +555,16 @@ class FullSwinHead(BaseDecodeHead):
 
     def forward(self, inputs):
         # Receive 4 stage backbone feature map: 1/4, 1/8, 1/16, 1/32
-        inputs = self._transform_inputs(inputs)
-        x = inputs[0]
-        hw_shape = x.shape[1:]
+        # inputs = self._transform_inputs(inputs)
+        x = inputs[3]
+        print(x.shape)
+        x = x.permute(0, 2, 3, 1)
+        B, H, W, C = x.shape
+        print(x.shape)
+        hw_shape = (H, W)
+        x = x.view(B, H * W, C)
+        print(x.shape)
+        os.system("pause")
         outs = []
         for i, stage in enumerate(self.stages):
             x, hw_shape, out, out_hw_shape = stage(x, hw_shape)
