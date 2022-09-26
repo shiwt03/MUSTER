@@ -368,7 +368,7 @@ class SwinBlock(BaseModule):
 
         def _inner_forward(x):
             identity = x
-            print(x.shape)
+            # print(x.shape)
             x = self.norm1(x)
             x = self.attn(x, hw_shape)
 
@@ -475,7 +475,7 @@ class SwinBlockSequence(BaseModule):
 
         if self.is_upsample:
             up_hw_shape = [hw_shape[0] * 2, hw_shape[1] * 2]
-            print(x.shape)
+            # print(x.shape)
             #os.system("pause")
             B, HW, C = x.shape
             x_up = x.view(B, hw_shape[0], hw_shape[1], C)
@@ -573,17 +573,23 @@ class FullSwinHead(BaseDecodeHead):
         # os.system("pause")
         outs = []
         out = None
+        out_hw_shape = None
         for i, stage in enumerate(self.stages):
+            C //= 2
             x, hw_shape, out, out_hw_shape = stage(x, hw_shape)
             #if i in self.out_indices:
 
 
-        out = out.view(-1, *out_hw_shape,
-                               self.num_features[i]).permute(0, 3, 1,
-                                                             2).contiguous()
-        outs.append(out)
+        # print(out.shape)
+        # os.system("pause")
+        # out = out.view(-1, *out_hw_shape,
+        #                        self.num_features[i]).permute(0, 3, 1,
+        #                                                     2).contiguous()
+        out = out.view(B, hw_shape[0], hw_shape[1], C * 2).permute(0, 3, 1, 2)
 
-        out = self.fusion_conv(torch.cat(outs, dim=1))
+        # outs.append(out)
+
+        # out = self.fusion_conv(torch.cat(outs, dim=1))
 
         out = self.cls_seg(out)
 
