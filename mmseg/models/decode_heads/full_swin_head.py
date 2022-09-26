@@ -6,7 +6,7 @@ from mmcv.cnn import ConvModule
 
 from mmseg.models.builder import HEADS
 from mmseg.models.decode_heads.decode_head import BaseDecodeHead
-from mmseg.ops import resize
+from mmseg.ops import Upsample, resize
 
 import warnings
 from collections import OrderedDict
@@ -95,9 +95,9 @@ class WindowMSA(BaseModule):
                 Wh*Ww, Wh*Ww), value should be between (-inf, 0].
         """
         B, N, C = x.shape
-        print(x.shape)
-        print(self.embed_dims)
-        os.system("pause")
+        # print(x.shape)
+        # print(self.embed_dims)
+        # os.system("pause")
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads,
                                   C // self.num_heads).permute(2, 0, 3, 1, 4)
         # make torchscript happy (cannot use tensor as tuple)
@@ -340,7 +340,6 @@ class SwinBlock(BaseModule):
         super(SwinBlock, self).__init__(init_cfg=init_cfg)
 
         self.with_cp = with_cp
-
         self.norm1 = build_norm_layer(norm_cfg, embed_dims)[1]
         self.attn = ShiftWindowMSA(
             embed_dims=embed_dims,
@@ -463,11 +462,11 @@ class SwinBlockSequence(BaseModule):
 
         self.is_upsample = is_upsample
         self.conv = ConvModule(
-            in_channels=feedforward_channels,
-            out_channels=feedforward_channels,
+            in_channels=embed_dims,
+            out_channels=embed_dims // 2,
             kernel_size=1,
             stride=1,
-            norm_cfg=norm_cfg,
+            norm_cfg=dict(type='BN', requires_grad=True),
             act_cfg=act_cfg)
 
     def forward(self, x, hw_shape):
@@ -476,12 +475,19 @@ class SwinBlockSequence(BaseModule):
 
         if self.is_upsample:
             up_hw_shape = [hw_shape[0] * 2, hw_shape[1] * 2]
+            print(x.shape)
+            #os.system("pause")
+            B, HW, C = x.shape
+            x_up = x.view(B, hw_shape[0], hw_shape[1], C)
+            x_up = x_up.permute(0, 3, 1, 2)
             x_up = resize(
-                input=self.conv(x),
+                input=self.conv(x_up),
                 # size=inputs[0].shape[2:],
                 size=up_hw_shape,
-                mode=self.interpolate_mode,
-                align_corners=self.align_corners)
+                # mode=self.interpolate_mode,
+                # align_corners=self.align_corners
+            )
+            x_up = x_up.permute(0, 2, 3, 1).view(B, up_hw_shape[0]*up_hw_shape[1], C // 2)
             return x_up, up_hw_shape, x, hw_shape
         else:
             return x, hw_shape, x, hw_shape
@@ -491,7 +497,7 @@ class SwinBlockSequence(BaseModule):
 class FullSwinHead(BaseDecodeHead):
 
     def __init__(self,
-                 embed_dims=96,
+                 embed_dims=768,
                  patch_size=4,
                  window_size=7,
                  mlp_ratio=4,
@@ -541,7 +547,7 @@ class FullSwinHead(BaseDecodeHead):
                 attn_drop_rate=attn_drop_rate,
                 drop_path_rate=dpr[sum(depths[:i]):sum(depths[:i + 1])],
 
-                is_upsample=False,
+                is_upsample=is_upsample,
 
                 act_cfg=act_cfg,
                 norm_cfg=norm_cfg,
@@ -549,32 +555,33 @@ class FullSwinHead(BaseDecodeHead):
                 init_cfg=None)
             self.stages.append(stage)
             if is_upsample:
-                in_channels = in_channels
+                in_channels = in_channels // 2
 
         self.num_features = [int(embed_dims * 2 ** i) for i in range(num_layers)]
 
     def forward(self, inputs):
         # Receive 4 stage backbone feature map: 1/4, 1/8, 1/16, 1/32
-        # inputs = self._transform_inputs(inputs)
+        inputs = self._transform_inputs(inputs)
         x = inputs[3]
-        print(x.shape)
+        # print(x.shape)
         x = x.permute(0, 2, 3, 1)
         B, H, W, C = x.shape
-        print(x.shape)
+        # print(x.shape)
         hw_shape = (H, W)
         x = x.view(B, H * W, C)
-        print(x.shape)
-        os.system("pause")
+        # print(x.shape)
+        # os.system("pause")
         outs = []
+        out = None
         for i, stage in enumerate(self.stages):
             x, hw_shape, out, out_hw_shape = stage(x, hw_shape)
-            if i in self.out_indices:
-                norm_layer = getattr(self, f'norm{i}')
-                out = norm_layer(out)
-                out = out.view(-1, *out_hw_shape,
+            #if i in self.out_indices:
+
+
+        out = out.view(-1, *out_hw_shape,
                                self.num_features[i]).permute(0, 3, 1,
                                                              2).contiguous()
-                outs.append(out)
+        outs.append(out)
 
         out = self.fusion_conv(torch.cat(outs, dim=1))
 
