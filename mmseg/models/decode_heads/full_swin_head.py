@@ -469,10 +469,12 @@ class SwinBlockSequence(BaseModule):
             norm_cfg=dict(type='BN', requires_grad=True),
             act_cfg=act_cfg)
 
-    def forward(self, x, hw_shape):
+    def forward(self, x, skip_x, hw_shape):
         for block in self.blocks:
             x = block(x, hw_shape)
 
+        # x = x.cat(skip_x, dim=2)
+        x = torch.cat([x, skip_x], dim=2)
         if self.is_upsample:
             up_hw_shape = [hw_shape[0] * 2, hw_shape[1] * 2]
             # print(x.shape)
@@ -489,10 +491,10 @@ class SwinBlockSequence(BaseModule):
                 # align_corners=self.align_corners
             )
             '''
-            x_up = self.conv(x_up)
+            # x_up = self.conv(x_up)
             ps = nn.PixelShuffle(2)
             x_up = ps(x_up)
-            x_up = x_up.permute(0, 2, 3, 1).view(B, up_hw_shape[0]*up_hw_shape[1], C // 2)
+            x_up = x_up.permute(0, 2, 3, 1).view(B, up_hw_shape[0]*up_hw_shape[1], C // 4)
             return x_up, up_hw_shape, x, hw_shape
         else:
             return x, hw_shape, x, hw_shape
@@ -567,21 +569,29 @@ class FullSwinHead(BaseDecodeHead):
     def forward(self, inputs):
         # Receive 4 stage backbone feature map: 1/4, 1/8, 1/16, 1/32
         inputs = self._transform_inputs(inputs)
-        x = inputs[3]
-        # print(x.shape)
-        x = x.permute(0, 2, 3, 1)
-        B, H, W, C = x.shape
-        # print(x.shape)
+
+        B, H, W, C = inputs[3].shape
         hw_shape = (H, W)
-        x = x.view(B, H * W, C)
-        # print(x.shape)
-        # os.system("pause")
+        input_layers = []
+        for input_layer in inputs:
+            ind = input_layer
+            # print(x.shape)
+            ind = ind.permute(0, 2, 3, 1)
+            B, H, W, C = ind.shape
+            # print(x.shape)
+            hw_shape = (H, W)
+            ind = ind.view(B, H * W, C)
+            input_layers.append(ind)
+            # print(x.shape)
+            # os.system("pause")
+
         outs = []
         out = None
         out_hw_shape = None
+        x = input_layers[3]
         for i, stage in enumerate(self.stages):
             C //= 2
-            x, hw_shape, out, out_hw_shape = stage(x, hw_shape)
+            x, hw_shape, out, out_hw_shape = stage(x, input_layers[3-i], hw_shape)
             #if i in self.out_indices:
 
 
@@ -590,7 +600,7 @@ class FullSwinHead(BaseDecodeHead):
         # out = out.view(-1, *out_hw_shape,
         #                        self.num_features[i]).permute(0, 3, 1,
         #                                                     2).contiguous()
-        out = out.view(B, hw_shape[0], hw_shape[1], C * 2).permute(0, 3, 1, 2)
+        out = out.view(B, hw_shape[0], hw_shape[1], C * 4).permute(0, 3, 1, 2)
 
         # outs.append(out)
 
