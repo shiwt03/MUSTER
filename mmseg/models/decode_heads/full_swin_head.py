@@ -463,7 +463,7 @@ class SwinBlockSequence(BaseModule):
         self.is_upsample = is_upsample
         self.conv = ConvModule(
             in_channels=embed_dims,
-            out_channels=embed_dims // 2,
+            out_channels=embed_dims * 2,
             kernel_size=1,
             stride=1,
             norm_cfg=dict(type='BN', requires_grad=True),
@@ -480,6 +480,7 @@ class SwinBlockSequence(BaseModule):
             B, HW, C = x.shape
             x_up = x.view(B, hw_shape[0], hw_shape[1], C)
             x_up = x_up.permute(0, 3, 1, 2)
+            '''
             x_up = resize(
                 input=self.conv(x_up),
                 # size=inputs[0].shape[2:],
@@ -487,6 +488,10 @@ class SwinBlockSequence(BaseModule):
                 # mode=self.interpolate_mode,
                 # align_corners=self.align_corners
             )
+            '''
+            x_up = self.conv(x_up)
+            ps = nn.PixelShuffle(2)
+            x_up = ps(x_up)
             x_up = x_up.permute(0, 2, 3, 1).view(B, up_hw_shape[0]*up_hw_shape[1], C // 2)
             return x_up, up_hw_shape, x, hw_shape
         else:

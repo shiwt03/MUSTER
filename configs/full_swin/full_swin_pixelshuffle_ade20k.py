@@ -38,7 +38,7 @@ model = dict(
         patch_size=4,
         window_size=7,
         mlp_ratio=4,
-        depths=(2, 1, 1, 1),
+        depths=(1, 1, 1, 1),
         num_heads=(4, 8, 16, 32),
         strides=(4, 2, 2, 2),
 
@@ -91,4 +91,4 @@ lr_config = dict(
     by_epoch=False)
 
 # By default, models are trained on 8 GPUs with 2 images per GPU
-data = dict(samples_per_gpu=2)
+data = dict(samples_per_gpu=4)
