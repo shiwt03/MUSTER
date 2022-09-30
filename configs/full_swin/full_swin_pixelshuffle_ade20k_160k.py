@@ -38,9 +38,9 @@ model = dict(
         patch_size=4,
         window_size=7,
         mlp_ratio=4,
-        depths=(1, 1, 1, 1),
-        num_heads=(4, 8, 16, 32),
-        strides=(4, 2, 2, 2),
+        depths=(2, 2, 2, 2),
+        num_heads=(32, 16, 8, 4),
+        strides=(2, 2, 2, 4),
 
         qkv_bias=True,
         qk_scale=None,

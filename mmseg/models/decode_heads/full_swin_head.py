@@ -470,17 +470,19 @@ class SwinBlockSequence(BaseModule):
             act_cfg=act_cfg)
 
     def forward(self, x, skip_x, hw_shape):
+        x_cat = torch.cat([x, skip_x], dim=2)
         for block in self.blocks:
-            x = block(x, hw_shape)
+            x = block(x_cat, hw_shape)
 
         # x = x.cat(skip_x, dim=2)
-        x = torch.cat([x, skip_x], dim=2)
+        # x_up = torch.cat([x, skip_x], dim=2)
+        x_up = x
         if self.is_upsample:
             up_hw_shape = [hw_shape[0] * 2, hw_shape[1] * 2]
             # print(x.shape)
             #os.system("pause")
-            B, HW, C = x.shape
-            x_up = x.view(B, hw_shape[0], hw_shape[1], C)
+            B, HW, C = x_up.shape
+            x_up = x_up.view(B, hw_shape[0], hw_shape[1], C)
             x_up = x_up.permute(0, 3, 1, 2)
             '''
             x_up = resize(
@@ -524,7 +526,7 @@ class FullSwinHead(BaseDecodeHead):
 
         num_layers = len(depths)
 
-        assert strides[0] == patch_size, 'Use non-overlapping patch embed.'
+        assert strides[3] == patch_size, 'Use non-overlapping patch embed.'
 
         self.drop_after_pos = nn.Dropout(p=drop_rate)
 

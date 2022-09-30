@@ -2,7 +2,7 @@
 
 _base_ = [
     '../_base_/models/full_swin.py', '../_base_/datasets/ade20k.py',
-    '../_base_/default_runtime.py', '../_base_/schedules/schedule_160k.py'
+    '../_base_/default_runtime.py', '../_base_/schedules/schedule_320k.py'
 ]
 checkpoint_file = 'https://download.openmmlab.com/mmsegmentation/v0.5/pretrain/swin/swin_base_patch4_window7_224_20220317-e9b98025.pth'  # noqa
 norm_cfg = dict(type='LN', requires_grad=True)
@@ -34,11 +34,11 @@ model = dict(
     decode_head=dict(
         type='FullSwinHead',
 
-        embed_dims=1024,
+        embed_dims=2048,
         patch_size=4,
         window_size=7,
         mlp_ratio=4,
-        depths=(2, 1, 1, 1),
+        depths=(2, 2, 2, 2),
         num_heads=(32, 16, 8, 4),
         strides=(2, 2, 2, 4),
 
@@ -54,7 +54,7 @@ model = dict(
         in_channels=[768, 384, 192, 96],
         in_index=[0, 1, 2, 3],
         # pool_scales=(1, 2, 3, 6),
-        channels=128,
+        channels=256,
         # dropout_ratio=0.1,
         num_classes=150,
         norm_cfg=norm_cfg,
@@ -91,4 +91,4 @@ lr_config = dict(
     by_epoch=False)
 
 # By default, models are trained on 8 GPUs with 2 images per GPU
-data = dict(samples_per_gpu=2)
+data = dict(samples_per_gpu=4)
