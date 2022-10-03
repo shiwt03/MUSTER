@@ -86,7 +86,7 @@ class WindowMSA(BaseModule):
     def init_weights(self):
         trunc_normal_(self.relative_position_bias_table, std=0.02)
 
-    def forward(self, x, skip_x,mask=None):
+    def forward(self, x, skip_x, mask=None):
         """
         Args:
 
@@ -102,7 +102,7 @@ class WindowMSA(BaseModule):
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads,
                                   C // self.num_heads).permute(2, 0, 3, 1, 4)
         skip_qkv = self.qkv(skip_x).reshape(B, N, 3, self.num_heads,
-                                  C // self.num_heads).permute(2, 0, 3, 1, 4)
+                                            C // self.num_heads).permute(2, 0, 3, 1, 4)
         # make torchscript happy (cannot use tensor as tuple)
         # q, k, v = qkv[0], qkv[1], qkv[2]
         q, k, v = skip_qkv[0], qkv[1], qkv[2]
@@ -384,7 +384,7 @@ class SwinBlock(BaseModule):
             identity = x
             # print(x.shape)
             x = self.norm1(x)
-            x = self.attn(x, skip_x,hw_shape)
+            x = self.attn(x, skip_x, hw_shape)
 
             x = x + identity
 
@@ -442,7 +442,10 @@ class SwinBlockSequence(BaseModule):
                  drop_rate=0.,
                  attn_drop_rate=0.,
                  drop_path_rate=0.,
+
                  is_upsample=False,
+                 is_concat=True,
+
                  act_cfg=dict(type='GELU'),
                  norm_cfg=dict(type='LN'),
                  with_cp=False,
@@ -484,17 +487,14 @@ class SwinBlockSequence(BaseModule):
             act_cfg=act_cfg)
 
     def forward(self, x, skip_x, hw_shape):
-        x_cat = torch.cat([x, skip_x], dim=2)
         for block in self.blocks:
-            x = block(x_cat, skip_x,hw_shape)
+            x = block(x, skip_x, hw_shape)
 
-        # x = x.cat(skip_x, dim=2)
-        # x_up = torch.cat([x, skip_x], dim=2)
-        x_up = x
         if self.is_upsample:
+            x_up = torch.cat([x, skip_x], dim=2)
             up_hw_shape = [hw_shape[0] * 2, hw_shape[1] * 2]
             # print(x.shape)
-            #os.system("pause")
+            # os.system("pause")
             B, HW, C = x_up.shape
             x_up = x_up.view(B, hw_shape[0], hw_shape[1], C)
             x_up = x_up.permute(0, 3, 1, 2)
@@ -510,7 +510,7 @@ class SwinBlockSequence(BaseModule):
             # x_up = self.conv(x_up)
             ps = nn.PixelShuffle(2)
             x_up = ps(x_up)
-            x_up = x_up.permute(0, 2, 3, 1).view(B, up_hw_shape[0]*up_hw_shape[1], C // 4)
+            x_up = x_up.permute(0, 2, 3, 1).view(B, up_hw_shape[0] * up_hw_shape[1], C // 4)
             return x_up, up_hw_shape, x, hw_shape
         else:
             return x, hw_shape, x, hw_shape
@@ -555,8 +555,10 @@ class FullSwinHeadwithSKA(BaseDecodeHead):
         for i in range(num_layers):
             if i < num_layers - 1:
                 is_upsample = True
+                is_concat = True
             else:
                 is_upsample = False
+                is_concat = False
 
             stage = SwinBlockSequence(
                 embed_dims=in_channels,
@@ -571,6 +573,7 @@ class FullSwinHeadwithSKA(BaseDecodeHead):
                 drop_path_rate=dpr[sum(depths[:i]):sum(depths[:i + 1])],
 
                 is_upsample=is_upsample,
+                is_concat=is_concat,
 
                 act_cfg=act_cfg,
                 norm_cfg=norm_cfg,
@@ -581,6 +584,17 @@ class FullSwinHeadwithSKA(BaseDecodeHead):
                 in_channels = in_channels // 2
 
         self.num_features = [int(embed_dims * 2 ** i) for i in range(num_layers)]
+        self.mlp_ratio = mlp_ratio
+
+        self.outffn = FFN(
+            embed_dims=self.channels,
+            feedforward_channels=int(self.mlp_ratio * self.channels),
+            num_fcs=2,
+            ffn_drop=drop_rate,
+            dropout_layer=dict(type='DropPath', drop_prob=drop_path_rate),
+            act_cfg=act_cfg,
+            add_identity=True,
+            init_cfg=None)
 
     def forward(self, inputs):
         # Receive 4 stage backbone feature map: 1/4, 1/8, 1/16, 1/32
@@ -607,20 +621,10 @@ class FullSwinHeadwithSKA(BaseDecodeHead):
         x = input_layers[3]
         for i, stage in enumerate(self.stages):
             C //= 2
-            x, hw_shape, out, out_hw_shape = stage(x, input_layers[3-i], hw_shape)
-            #if i in self.out_indices:
+            x, hw_shape, out, out_hw_shape = stage(x, input_layers[3 - i], hw_shape)
 
-
-        # print(out.shape)
-        # os.system("pause")
-        # out = out.view(-1, *out_hw_shape,
-        #                        self.num_features[i]).permute(0, 3, 1,
-        #                                                     2).contiguous()
-        out = out.view(B, hw_shape[0], hw_shape[1], C * 4).permute(0, 3, 1, 2)
-
-        # outs.append(out)
-
-        # out = self.fusion_conv(torch.cat(outs, dim=1))
+        out = out.view(B, hw_shape[0], hw_shape[1], C * 2).permute(0, 3, 1, 2)
+        out = self.outffn(out)
 
         out = self.cls_seg(out)
 
