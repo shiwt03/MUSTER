@@ -86,7 +86,7 @@ class WindowMSA(BaseModule):
     def init_weights(self):
         trunc_normal_(self.relative_position_bias_table, std=0.02)
 
-    def forward(self, x, mask=None):
+    def forward(self, x, skip_x,mask=None):
         """
         Args:
 
@@ -95,13 +95,17 @@ class WindowMSA(BaseModule):
                 Wh*Ww, Wh*Ww), value should be between (-inf, 0].
         """
         B, N, C = x.shape
+        assert x.shape == skip_x.shape, 'x.shape != skip_x.shape in WindowMSA'
         # print(x.shape)
         # print(self.embed_dims)
         # os.system("pause")
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads,
                                   C // self.num_heads).permute(2, 0, 3, 1, 4)
+        skip_qkv = self.qkv(skip_x).reshape(B, N, 3, self.num_heads,
+                                  C // self.num_heads).permute(2, 0, 3, 1, 4)
         # make torchscript happy (cannot use tensor as tuple)
-        q, k, v = qkv[0], qkv[1], qkv[2]
+        # q, k, v = qkv[0], qkv[1], qkv[2]
+        q, k, v = skip_qkv[0], qkv[1], qkv[2]
 
         q = q * self.scale
         attn = (q @ k.transpose(-2, -1))
@@ -188,22 +192,29 @@ class ShiftWindowMSA(BaseModule):
 
         self.drop = build_dropout(dropout_layer)
 
-    def forward(self, query, hw_shape):
+    def forward(self, query, skip_query, hw_shape):
         B, L, C = query.shape
         H, W = hw_shape
         assert L == H * W, 'input feature has wrong size'
+        assert query.shape == skip_query.shape, 'skip query should has the same shape with query'
         query = query.view(B, H, W, C)
+        skip_query = skip_query.view(B, H, W, C)
 
         # pad feature maps to multiples of window size
         pad_r = (self.window_size - W % self.window_size) % self.window_size
         pad_b = (self.window_size - H % self.window_size) % self.window_size
         query = F.pad(query, (0, 0, 0, pad_r, 0, pad_b))
+        skip_query = F.pad(skip_query, (0, 0, 0, pad_r, 0, pad_b))
         H_pad, W_pad = query.shape[1], query.shape[2]
 
         # cyclic shift
         if self.shift_size > 0:
             shifted_query = torch.roll(
                 query,
+                shifts=(-self.shift_size, -self.shift_size),
+                dims=(1, 2))
+            shifted_skip_query = torch.roll(
+                skip_query,
                 shifts=(-self.shift_size, -self.shift_size),
                 dims=(1, 2))
 
@@ -231,15 +242,18 @@ class ShiftWindowMSA(BaseModule):
                 attn_mask == 0, float(0.0))
         else:
             shifted_query = query
+            shifted_skip_query = skip_query
             attn_mask = None
 
         # nW*B, window_size, window_size, C
         query_windows = self.window_partition(shifted_query)
+        skip_query_windows = self.window_partition(shifted_skip_query)
         # nW*B, window_size*window_size, C
         query_windows = query_windows.view(-1, self.window_size ** 2, C)
+        skip_query_windows = skip_query_windows.view(-1, self.window_size ** 2, C)
 
         # W-MSA/SW-MSA (nW*B, window_size*window_size, C)
-        attn_windows = self.w_msa(query_windows, mask=attn_mask)
+        attn_windows = self.w_msa(query_windows, skip_query_windows, mask=attn_mask)
 
         # merge windows
         attn_windows = attn_windows.view(-1, self.window_size,
@@ -364,13 +378,13 @@ class SwinBlock(BaseModule):
             add_identity=True,
             init_cfg=None)
 
-    def forward(self, x, hw_shape):
+    def forward(self, x, skip_x, hw_shape):
 
         def _inner_forward(x):
             identity = x
             # print(x.shape)
             x = self.norm1(x)
-            x = self.attn(x, hw_shape)
+            x = self.attn(x, skip_x,hw_shape)
 
             x = x + identity
 
@@ -472,7 +486,7 @@ class SwinBlockSequence(BaseModule):
     def forward(self, x, skip_x, hw_shape):
         x_cat = torch.cat([x, skip_x], dim=2)
         for block in self.blocks:
-            x = block(x_cat, hw_shape)
+            x = block(x_cat, skip_x,hw_shape)
 
         # x = x.cat(skip_x, dim=2)
         # x_up = torch.cat([x, skip_x], dim=2)
@@ -503,7 +517,7 @@ class SwinBlockSequence(BaseModule):
 
 
 @HEADS.register_module()
-class FullSwinHeadz(BaseDecodeHead):
+class FullSwinHeadwithSKA(BaseDecodeHead):
 
     def __init__(self,
                  embed_dims=768,
