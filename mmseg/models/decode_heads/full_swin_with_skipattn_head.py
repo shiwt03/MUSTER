@@ -586,6 +586,19 @@ class FullSwinHeadwithSKA(BaseDecodeHead):
         self.num_features = [int(embed_dims * 2 ** i) for i in range(num_layers)]
         self.mlp_ratio = mlp_ratio
 
+        self.ffns = ModuleList()
+        for i in range(num_layers):
+            mlp = FFN(
+                embed_dims=in_channels,
+                feedforward_channels=int(self.mlp_ratio * in_channels),
+                num_fcs=2,
+                ffn_drop=drop_rate,
+                dropout_layer=dict(type='DropPath', drop_prob=drop_path_rate),
+                act_cfg=act_cfg,
+                add_identity=True,
+                init_cfg=None)
+            self.ffns.append(mlp)
+            in_channels *= 2
         self.outffn = FFN(
             embed_dims=self.channels,
             feedforward_channels=int(self.mlp_ratio * self.channels),
@@ -602,16 +615,28 @@ class FullSwinHeadwithSKA(BaseDecodeHead):
 
         B, H, W, C = inputs[3].shape
         hw_shape = (H, W)
+        pre_input_layers = []
         input_layers = []
-        for input_layer in inputs:
+        index = 0
+        for ffn in self.ffns:
+            ind = inputs[index]
+            ind = ind.permute(0, 2, 3, 1)
+            ind = ffn(ind)
+            pre_input_layers.append(ind)
+            index += 1
+        for input_layer in pre_input_layers:
             ind = input_layer
             # print(x.shape)
-            ind = ind.permute(0, 2, 3, 1)
+            # ind = ind.permute(0, 2, 3, 1)
             B, H, W, C = ind.shape
             # print(x.shape)
             hw_shape = (H, W)
             ind = ind.view(B, H * W, C)
+            # ind = self.ffn(ind, embed_dims=int(C), feedforward_channels=int(self.mlp_ratio * C))
             input_layers.append(ind)
+
+
+
             # print(x.shape)
             # os.system("pause")
 
