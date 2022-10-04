@@ -90,4 +90,4 @@ lr_config = dict(
     by_epoch=False)
 
 # By default, models are trained on 8 GPUs with 2 images per GPU
-data = dict(samples_per_gpu=4)
+data = dict(samples_per_gpu=2)

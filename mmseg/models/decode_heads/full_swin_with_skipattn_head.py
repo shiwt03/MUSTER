@@ -615,28 +615,20 @@ class FullSwinHeadwithSKA(BaseDecodeHead):
 
         B, H, W, C = inputs[3].shape
         hw_shape = (H, W)
-        pre_input_layers = []
         input_layers = []
         index = 0
         for ffn in self.ffns:
             ind = inputs[index]
             ind = ind.permute(0, 2, 3, 1)
-            ind = ffn(ind)
-            pre_input_layers.append(ind)
-            index += 1
-        for input_layer in pre_input_layers:
-            ind = input_layer
             # print(x.shape)
             # ind = ind.permute(0, 2, 3, 1)
             B, H, W, C = ind.shape
             # print(x.shape)
             hw_shape = (H, W)
             ind = ind.view(B, H * W, C)
-            # ind = self.ffn(ind, embed_dims=int(C), feedforward_channels=int(self.mlp_ratio * C))
+            ind = ffn(ind)
             input_layers.append(ind)
-
-
-
+            index += 1
             # print(x.shape)
             # os.system("pause")
 
@@ -648,8 +640,8 @@ class FullSwinHeadwithSKA(BaseDecodeHead):
             C //= 2
             x, hw_shape, out, out_hw_shape = stage(x, input_layers[3 - i], hw_shape)
 
-        out = out.view(B, hw_shape[0], hw_shape[1], C * 2).permute(0, 3, 1, 2)
         out = self.outffn(out)
+        out = out.view(B, hw_shape[0], hw_shape[1], C * 2).permute(0, 3, 1, 2)
 
         out = self.cls_seg(out)
 
