@@ -3,7 +3,7 @@ dataset_type = 'ChaseDB1Dataset'
 data_root = 'data/CHASE_DB1'
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
-img_scale = (960, 999)
+img_scale = (1024, 1024)
 crop_size = (128, 128)
 train_pipeline = [
     dict(type='LoadImageFromFile'),

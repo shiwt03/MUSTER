@@ -1,8 +1,8 @@
 # model settings
 
 _base_ = [
-    '../_base_/models/full_swin.py', '../_base_/datasets/ade20k.py',
-    '../_base_/default_runtime.py', '../_base_/schedules/schedule_320k.py'
+    '../_base_/models/full_swin.py', '../_base_/datasets/chase_db1.py',
+    '../_base_/default_runtime.py', '../_base_/schedules/schedule_20k.py'
 ]
 checkpoint_file = 'https://download.openmmlab.com/mmsegmentation/v0.5/pretrain/swin/swin_base_patch4_window12_384_22k_20220317-e5c09f74.pth'  # noqa
 norm_cfg = dict(type='LN', requires_grad=True)
@@ -53,9 +53,9 @@ model = dict(
         in_channels=[1024, 512, 256, 128],
         in_index=[0, 1, 2, 3],
         # pool_scales=(1, 2, 3, 6),
-        channels=256,
+        channels=128,
         # dropout_ratio=0.1,
-        num_classes=150,
+        num_classes=2,
         norm_cfg=norm_cfg,
         align_corners=False,
         loss_decode=dict(

@@ -380,10 +380,11 @@ class SwinBlock(BaseModule):
 
     def forward(self, x, skip_x, hw_shape):
 
-        def _inner_forward(x):
+        def _inner_forward(x, skip_x):
             identity = x
             # print(x.shape)
             x = self.norm1(x)
+            skip_x = self.norm1(skip_x)
             x = self.attn(x, skip_x, hw_shape)
 
             x = x + identity
@@ -391,13 +392,13 @@ class SwinBlock(BaseModule):
             identity = x
             x = self.norm2(x)
             x = self.ffn(x, identity=identity)
-
+            x = self.norm2(x)
             return x
 
         if self.with_cp and x.requires_grad:
             x = cp.checkpoint(_inner_forward, x)
         else:
-            x = _inner_forward(x)
+            x = _inner_forward(x, skip_x)
 
         return x
 
@@ -513,6 +514,7 @@ class SwinBlockSequence(BaseModule):
             x_up = x_up.permute(0, 2, 3, 1).view(B, up_hw_shape[0] * up_hw_shape[1], C // 4)
             return x_up, up_hw_shape, x, hw_shape
         else:
+            # x_cat = torch.cat([x, skip_x], dim=2)
             return x, hw_shape, x, hw_shape
 
 
@@ -583,10 +585,19 @@ class FullSwinHeadwithSKA(BaseDecodeHead):
             if is_upsample:
                 in_channels = in_channels // 2
 
+        self.conv = ConvModule(
+            in_channels=in_channels * 2,
+            out_channels=in_channels,
+            kernel_size=1,
+            stride=1,
+            norm_cfg=dict(type='BN', requires_grad=True),
+            act_cfg=act_cfg)
+
         self.num_features = [int(embed_dims * 2 ** i) for i in range(num_layers)]
         self.mlp_ratio = mlp_ratio
 
         self.ffns = ModuleList()
+        self.norms = ModuleList()
         for i in range(num_layers):
             mlp = FFN(
                 embed_dims=in_channels,
@@ -598,9 +609,11 @@ class FullSwinHeadwithSKA(BaseDecodeHead):
                 add_identity=True,
                 init_cfg=None)
             self.ffns.append(mlp)
+            norm = build_norm_layer(norm_cfg, in_channels)[1]
+            self.norms.append(norm)
             in_channels *= 2
         self.outffn = FFN(
-            embed_dims=self.channels,
+            embed_dims=self.channels * 2,
             feedforward_channels=int(self.mlp_ratio * self.channels),
             num_fcs=2,
             ffn_drop=drop_rate,
@@ -620,17 +633,18 @@ class FullSwinHeadwithSKA(BaseDecodeHead):
         for ffn in self.ffns:
             ind = inputs[index]
             ind = ind.permute(0, 2, 3, 1)
-            # print(x.shape)
-            # ind = ind.permute(0, 2, 3, 1)
             B, H, W, C = ind.shape
-            # print(x.shape)
             hw_shape = (H, W)
             ind = ind.view(B, H * W, C)
             ind = ffn(ind)
             input_layers.append(ind)
             index += 1
-            # print(x.shape)
-            # os.system("pause")
+        index = 0
+        for norm in self.norms:
+            ind = input_layers[index]
+            ind = norm(ind)
+            input_layers[index] = ind
+            index += 1
 
         outs = []
         out = None
@@ -640,8 +654,10 @@ class FullSwinHeadwithSKA(BaseDecodeHead):
             C //= 2
             x, hw_shape, out, out_hw_shape = stage(x, input_layers[3 - i], hw_shape)
 
+        out = torch.cat([out, input_layers[0]], dim=2)
         out = self.outffn(out)
-        out = out.view(B, hw_shape[0], hw_shape[1], C * 2).permute(0, 3, 1, 2)
+        out = out.view(B, hw_shape[0], hw_shape[1], C * 4).permute(0, 3, 1, 2)
+        out = self.conv(out)
 
         out = self.cls_seg(out)
 
