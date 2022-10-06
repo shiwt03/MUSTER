@@ -118,3 +118,4 @@ mmseg/.mim
 
 # Pytorch
 *.pth
+/GPU_monitor.bat

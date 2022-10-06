@@ -378,13 +378,14 @@ class SwinBlock(BaseModule):
             add_identity=True,
             init_cfg=None)
 
+        self.norm3 = build_norm_layer(norm_cfg, embed_dims)[1]
+
     def forward(self, x, skip_x, hw_shape):
 
         def _inner_forward(x, skip_x):
             identity = x
             # print(x.shape)
             x = self.norm1(x)
-            skip_x = self.norm1(skip_x)
             x = self.attn(x, skip_x, hw_shape)
 
             x = x + identity
@@ -392,7 +393,7 @@ class SwinBlock(BaseModule):
             identity = x
             x = self.norm2(x)
             x = self.ffn(x, identity=identity)
-            x = self.norm2(x)
+            x = self.norm3(x)
             return x
 
         if self.with_cp and x.requires_grad:
@@ -587,7 +588,7 @@ class FullSwinHeadwithSKA(BaseDecodeHead):
 
         self.conv = ConvModule(
             in_channels=in_channels * 2,
-            out_channels=in_channels,
+            out_channels=in_channels * 2,
             kernel_size=1,
             stride=1,
             norm_cfg=dict(type='BN', requires_grad=True),
@@ -613,8 +614,8 @@ class FullSwinHeadwithSKA(BaseDecodeHead):
             self.norms.append(norm)
             in_channels *= 2
         self.outffn = FFN(
-            embed_dims=self.channels * 2,
-            feedforward_channels=int(self.mlp_ratio * self.channels * 2),
+            embed_dims=self.channels,
+            feedforward_channels=int(self.mlp_ratio * self.channels),
             num_fcs=2,
             ffn_drop=drop_rate,
             dropout_layer=dict(type='DropPath', drop_prob=drop_path_rate),
