@@ -614,7 +614,7 @@ class FullSwinHeadwithSKA(BaseDecodeHead):
             in_channels *= 2
         self.outffn = FFN(
             embed_dims=self.channels * 2,
-            feedforward_channels=int(self.mlp_ratio * self.channels),
+            feedforward_channels=int(self.mlp_ratio * self.channels * 2),
             num_fcs=2,
             ffn_drop=drop_rate,
             dropout_layer=dict(type='DropPath', drop_prob=drop_path_rate),
