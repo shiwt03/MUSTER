@@ -382,7 +382,7 @@ class SwinBlock(BaseModule):
 
     def forward(self, x, skip_x, hw_shape):
 
-        def _inner_forward(x, skip_x):
+        def _inner_forward(x):
             identity = x
             # print(x.shape)
             x = self.norm1(x)
@@ -399,7 +399,7 @@ class SwinBlock(BaseModule):
         if self.with_cp and x.requires_grad:
             x = cp.checkpoint(_inner_forward, x)
         else:
-            x = _inner_forward(x, skip_x)
+            x = _inner_forward(x)
 
         return x
 
@@ -480,26 +480,28 @@ class SwinBlockSequence(BaseModule):
             self.blocks.append(block)
 
         self.is_upsample = is_upsample
-        self.conv = ConvModule(
-            in_channels=embed_dims * 2,
-            out_channels=embed_dims * 2,
-            kernel_size=1,
-            stride=1,
-            norm_cfg=dict(type='BN', requires_grad=True),
-            act_cfg=act_cfg)
+        if is_upsample:
+            self.conv = ConvModule(
+                in_channels=embed_dims * 2,
+                out_channels=embed_dims * 2,
+                kernel_size=1,
+                stride=1,
+                norm_cfg=dict(type='SyncBN', requires_grad=True),
+                act_cfg=act_cfg)
+        self.ps = nn.PixelShuffle(2)
 
     def forward(self, x, skip_x, hw_shape):
         for block in self.blocks:
             x = block(x, skip_x, hw_shape)
 
         if self.is_upsample:
-            x_up = torch.cat([x, skip_x], dim=2)
+            x = torch.cat([x, skip_x], dim=2)
             up_hw_shape = [hw_shape[0] * 2, hw_shape[1] * 2]
             # print(x.shape)
             # os.system("pause")
-            B, HW, C = x_up.shape
-            x_up = x_up.view(B, hw_shape[0], hw_shape[1], C)
-            x_up = x_up.permute(0, 3, 1, 2)
+            B, HW, C = x.shape
+            x = x.view(B, hw_shape[0], hw_shape[1], C)
+            x = x.permute(0, 3, 1, 2)
             '''
             x_up = resize(
                 input=self.conv(x_up),
@@ -511,15 +513,14 @@ class SwinBlockSequence(BaseModule):
             '''
             # x_up = self.conv(x_up)
 
-            x_up = self.conv(x_up)
+            x = self.conv(x)
 
-            ps = nn.PixelShuffle(2)
-            x_up = ps(x_up)
-            x_up = x_up.permute(0, 2, 3, 1).view(B, up_hw_shape[0] * up_hw_shape[1], C // 4)
-            return x_up, up_hw_shape, x, hw_shape
+            x = self.ps(x)
+            x = x.permute(0, 2, 3, 1).view(B, up_hw_shape[0] * up_hw_shape[1], C // 4)
+            return x
         else:
             # x_cat = torch.cat([x, skip_x], dim=2)
-            return x, hw_shape, x, hw_shape
+            return x
 
 
 @HEADS.register_module()
@@ -594,7 +595,7 @@ class FullSwinHeadwithSKA(BaseDecodeHead):
             out_channels=in_channels * 2,
             kernel_size=1,
             stride=1,
-            norm_cfg=dict(type='BN', requires_grad=True),
+            norm_cfg=dict(type='SyncBN', requires_grad=True),
             act_cfg=act_cfg)
 
         self.num_features = [int(embed_dims * 2 ** i) for i in range(num_layers)]
@@ -632,7 +633,6 @@ class FullSwinHeadwithSKA(BaseDecodeHead):
 
         B, H, W, C = inputs[3].shape
         hw_shape = (H, W)
-        input_layers = []
         index = 0
         for ffn in self.ffns:
             ind = inputs[index]
@@ -641,26 +641,27 @@ class FullSwinHeadwithSKA(BaseDecodeHead):
             hw_shape = (H, W)
             ind = ind.view(B, H * W, C)
             ind = ffn(ind)
-            input_layers.append(ind)
+            inputs[index] = ind
             index += 1
         index = 0
         for norm in self.norms:
-            ind = input_layers[index]
+            ind = inputs[index]
             ind = norm(ind)
-            input_layers[index] = ind
+            inputs[index] = ind
             index += 1
 
         outs = []
         out = None
-        out_hw_shape = None
-        x = input_layers[3]
+        x = inputs[3]
         for i, stage in enumerate(self.stages):
             C //= 2
-            x, hw_shape, out, out_hw_shape = stage(x, input_layers[3 - i], hw_shape)
+            x = stage(x, inputs[3 - i], hw_shape)
+            hw_shape = (hw_shape[0] * 2, hw_shape[1] * 2)
 
-        out = torch.cat([out, input_layers[0]], dim=2)
+        out = x
+        out = torch.cat([out, inputs[0]], dim=2)
         out = self.outffn(out)
-        out = out.view(B, hw_shape[0], hw_shape[1], C * 4).permute(0, 3, 1, 2)
+        out = out.view(B, hw_shape[0] // 2, hw_shape[1] // 2, C * 4).permute(0, 3, 1, 2)
         out = self.conv(out)
 
         out = self.cls_seg(out)
