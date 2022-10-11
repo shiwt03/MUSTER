@@ -30,6 +30,7 @@ from .stdc_head import STDCHead
 from .uper_head import UPerHead
 from .full_swin_head import FullSwinHead
 from .full_swin_with_skipattn_head import FullSwinHeadwithSKA
+from .UperFormer_head import UperFormerHead
 
 __all__ = [
     'FCNHead', 'PSPHead', 'ASPPHead', 'PSAHead', 'NLHead', 'GCHead', 'CCHead',
@@ -38,5 +39,5 @@ __all__ = [
     'PointHead', 'APCHead', 'DMHead', 'LRASPPHead', 'SETRUPHead',
     'SETRMLAHead', 'DPTHead', 'SETRMLAHead', 'SegmenterMaskTransformerHead',
     'SegformerHead', 'ISAHead', 'STDCHead', 'IterativeDecodeHead',
-    'KernelUpdateHead', 'KernelUpdator', 'FullSwinHead', 'FullSwinHeadwithSKA'
+    'KernelUpdateHead', 'KernelUpdator', 'FullSwinHead', 'FullSwinHeadwithSKA', 'UperFormerHead'
 ]
