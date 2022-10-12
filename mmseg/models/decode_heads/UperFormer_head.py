@@ -543,6 +543,7 @@ class SwinBlockSequence(BaseModule):
             return x
         else:
             # x_cat = torch.cat([x, skip_x], dim=2)
+            x = torch.cat([x, skip_x], dim=2)
             return x
 
 
@@ -682,7 +683,7 @@ class UperFormerHead(BaseDecodeHead):
             hw_shape = (hw_shape[0] * 2, hw_shape[1] * 2)
 
         out = x
-        out = torch.cat([out, inputs[0]], dim=2)
+        # out = torch.cat([out, inputs[0]], dim=2)
         out = self.outffn(out)
         out = out.view(B, hw_shape[0] // 2, hw_shape[1] // 2, C * 4).permute(0, 3, 1, 2)
         out = self.conv(out)
