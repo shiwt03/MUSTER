@@ -102,7 +102,7 @@ class WindowMSA(BaseModule):
         # os.system("pause")
         qkv = self.qkv(x).reshape(B, N, 2, self.num_heads,
                                   C // self.num_heads).permute(2, 0, 3, 1, 4)
-        skip_qkv = self.qkv(skip_x).reshape(B, N, 1, self.num_heads,
+        skip_qkv = self.skip_qkv(skip_x).reshape(B, N, 1, self.num_heads,
                                             C // self.num_heads).permute(2, 0, 3, 1, 4)
         # make torchscript happy (cannot use tensor as tuple)
         # q, k, v = qkv[0], qkv[1], qkv[2]
@@ -502,14 +502,13 @@ class SwinBlockSequence(BaseModule):
             self.skip_blocks.append(skip_block)
 
         self.is_upsample = is_upsample
-        if is_upsample:
-            self.conv = ConvModule(
-                in_channels=embed_dims * 2,
-                out_channels=embed_dims * 2,
-                kernel_size=1,
-                stride=1,
-                norm_cfg=dict(type='SyncBN', requires_grad=True),
-                act_cfg=act_cfg)
+        self.conv = ConvModule(
+            in_channels=embed_dims * 2,
+            out_channels=embed_dims * 2,
+            kernel_size=1,
+            stride=1,
+            norm_cfg=dict(type='SyncBN', requires_grad=True),
+            act_cfg=act_cfg)
         self.ps = nn.PixelShuffle(2)
 
     def forward(self, x, skip_x, hw_shape):
@@ -547,6 +546,10 @@ class SwinBlockSequence(BaseModule):
         else:
             # x_cat = torch.cat([x, skip_x], dim=2)
             x = torch.cat([x, skip_x], dim=2)
+            B, HW, C = x.shape
+            x = x.view(B, hw_shape[0], hw_shape[1], C).permute(0, 3, 1, 2)
+            x = self.conv(x)
+            x = x.permute(0, 2, 3, 1).view(B, hw_shape[0] * hw_shape[1], C)
             return x
 
 
@@ -617,14 +620,6 @@ class UperFormerHead(BaseDecodeHead):
             if is_upsample:
                 in_channels = in_channels // 2
 
-        self.conv = ConvModule(
-            in_channels=in_channels * 2,
-            out_channels=in_channels * 2,
-            kernel_size=1,
-            stride=1,
-            norm_cfg=dict(type='SyncBN', requires_grad=True),
-            act_cfg=act_cfg)
-
         self.num_features = [int(embed_dims * 2 ** i) for i in range(num_layers)]
         self.mlp_ratio = mlp_ratio
 
@@ -679,7 +674,6 @@ class UperFormerHead(BaseDecodeHead):
         # out = torch.cat([out, inputs[0]], dim=2)
         out = self.outffn(out)
         out = out.view(B, hw_shape[0] // 2, hw_shape[1] // 2, C * 4).permute(0, 3, 1, 2)
-        out = self.conv(out)
 
         out = self.cls_seg(out)
 
