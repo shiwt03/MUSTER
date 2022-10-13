@@ -28,10 +28,11 @@ from .setr_mla_head import SETRMLAHead
 from .setr_up_head import SETRUPHead
 from .stdc_head import STDCHead
 from .uper_head import UPerHead
-from .full_swin_head import FullSwinHead
-from .full_swin_with_skipattn_head import FullSwinHeadwithSKA
+# from .full_swin_head import FullSwinHead
+# from .full_swin_with_skipattn_head import FullSwinHeadwithSKA
 from .UperFormer_head import UperFormerHead
 from .UperFormer_head_plus import UperFormerHead_Plus
+from .UperFormer_head_WithoutSkipAttn import FullSwinHead
 
 __all__ = [
     'FCNHead', 'PSPHead', 'ASPPHead', 'PSAHead', 'NLHead', 'GCHead', 'CCHead',
@@ -40,5 +41,5 @@ __all__ = [
     'PointHead', 'APCHead', 'DMHead', 'LRASPPHead', 'SETRUPHead',
     'SETRMLAHead', 'DPTHead', 'SETRMLAHead', 'SegmenterMaskTransformerHead',
     'SegformerHead', 'ISAHead', 'STDCHead', 'IterativeDecodeHead',
-    'KernelUpdateHead', 'KernelUpdator', 'FullSwinHead', 'FullSwinHeadwithSKA', 'UperFormerHead','UperFormerHead_Plus'
+    'KernelUpdateHead', 'KernelUpdator', 'FullSwinHead', 'UperFormerHead','UperFormerHead_Plus'
 ]

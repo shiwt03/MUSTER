@@ -1,5 +1,5 @@
 _base_ = [
-    '../_base_/models/full_swin.py', '../_base_/datasets/ade20k.py',
+    '../_base_/models/UperFormer_swin.py', '../_base_/datasets/ade20k.py',
     '../_base_/default_runtime.py', '../_base_/schedules/schedule_160k.py'
 ]
 checkpoint_file = 'https://download.openmmlab.com/mmsegmentation/v0.5/pretrain/swin/swin_base_patch4_window12_384_22k_20220317-e5c09f74.pth'  # noqa
