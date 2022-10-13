@@ -354,6 +354,7 @@ class SwinBlock(BaseModule):
         super(SwinBlock, self).__init__(init_cfg=init_cfg)
 
         self.with_cp = with_cp
+        self.skip_norm = build_norm_layer(norm_cfg, embed_dims)[1]
         self.norm1 = build_norm_layer(norm_cfg, embed_dims)[1]
         self.attn = ShiftWindowMSA(
             embed_dims=embed_dims,
@@ -382,9 +383,10 @@ class SwinBlock(BaseModule):
 
     def forward(self, x, skip_x, hw_shape):
 
-        def _inner_forward(x):
+        def _inner_forward(x, skip_x):
             identity = x
             # print(x.shape)
+            skip_x = self.skip_norm(skip_x)
             x = self.norm1(x)
             x = self.attn(x, skip_x, hw_shape)
 
@@ -399,7 +401,7 @@ class SwinBlock(BaseModule):
         if self.with_cp and x.requires_grad:
             x = cp.checkpoint(_inner_forward, x)
         else:
-            x = _inner_forward(x)
+            x = _inner_forward(x, skip_x)
 
         return x
 
@@ -638,8 +640,6 @@ class UperFormerHead(BaseDecodeHead):
                 add_identity=True,
                 init_cfg=None)
             self.ffns.append(mlp)
-            norm = build_norm_layer(norm_cfg, in_channels)[1]
-            self.norms.append(norm)
             in_channels *= 2
         self.outffn = FFN(
             embed_dims=self.channels,
@@ -667,15 +667,7 @@ class UperFormerHead(BaseDecodeHead):
             ind = ffn(ind)
             inputs[index] = ind
             index += 1
-        index = 0
-        for norm in self.norms:
-            ind = inputs[index]
-            ind = norm(ind)
-            inputs[index] = ind
-            index += 1
 
-        outs = []
-        out = None
         x = inputs[3]
         for i, stage in enumerate(self.stages):
             C //= 2
