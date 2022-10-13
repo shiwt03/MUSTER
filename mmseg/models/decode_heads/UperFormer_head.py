@@ -76,7 +76,8 @@ class WindowMSA(BaseModule):
         rel_position_index = rel_position_index.flip(1).contiguous()
         self.register_buffer('relative_position_index', rel_position_index)
 
-        self.qkv = nn.Linear(embed_dims, embed_dims * 3, bias=qkv_bias)
+        self.qkv = nn.Linear(embed_dims, embed_dims * 2, bias=qkv_bias)
+        self.skip_qkv = nn.Linear(embed_dims, embed_dims, bias=qkv_bias)
         self.attn_drop = nn.Dropout(attn_drop_rate)
         self.proj = nn.Linear(embed_dims, embed_dims)
         self.proj_drop = nn.Dropout(proj_drop_rate)
@@ -99,13 +100,13 @@ class WindowMSA(BaseModule):
         # print(x.shape)
         # print(self.embed_dims)
         # os.system("pause")
-        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads,
+        qkv = self.qkv(x).reshape(B, N, 2, self.num_heads,
                                   C // self.num_heads).permute(2, 0, 3, 1, 4)
-        skip_qkv = self.qkv(skip_x).reshape(B, N, 3, self.num_heads,
+        skip_qkv = self.qkv(skip_x).reshape(B, N, 1, self.num_heads,
                                             C // self.num_heads).permute(2, 0, 3, 1, 4)
         # make torchscript happy (cannot use tensor as tuple)
         # q, k, v = qkv[0], qkv[1], qkv[2]
-        q, k, v = skip_qkv[0], qkv[1], qkv[2]
+        q, k, v = skip_qkv[0], qkv[0], qkv[1]
 
         q = q * self.scale
         attn = (q @ k.transpose(-2, -1))
