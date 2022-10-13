@@ -482,25 +482,6 @@ class SwinBlockSequence(BaseModule):
                 init_cfg=None)
             self.blocks.append(block)
 
-        self.skip_blocks = ModuleList()
-        for i in range(depth):
-            skip_block = SwinBlock(
-                embed_dims=embed_dims,
-                num_heads=num_heads,
-                feedforward_channels=feedforward_channels,
-                window_size=window_size,
-                shift=False if i % 2 == 0 else True,
-                qkv_bias=qkv_bias,
-                qk_scale=qk_scale,
-                drop_rate=drop_rate,
-                attn_drop_rate=attn_drop_rate,
-                drop_path_rate=drop_path_rates[i],
-                act_cfg=act_cfg,
-                norm_cfg=norm_cfg,
-                with_cp=with_cp,
-                init_cfg=None)
-            self.skip_blocks.append(skip_block)
-
         self.is_upsample = is_upsample
         self.conv = ConvModule(
             in_channels=embed_dims * 2,
@@ -512,12 +493,8 @@ class SwinBlockSequence(BaseModule):
         self.ps = nn.PixelShuffle(2)
 
     def forward(self, x, skip_x, hw_shape):
-        ori_x = x
         for block in self.blocks:
             x = block(x, skip_x, hw_shape)
-
-        for skip_block in self.skip_blocks:
-            skip_x = skip_block(skip_x, ori_x, hw_shape)
 
         if self.is_upsample:
             x = torch.cat([x, skip_x], dim=2)
