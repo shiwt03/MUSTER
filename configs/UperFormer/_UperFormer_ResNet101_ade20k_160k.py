@@ -5,7 +5,7 @@ _base_ = [
     '../_base_/default_runtime.py',
     '../_base_/schedules/schedule_160k.py'
 ]
-checkpoint_file = 'https://download.openmmlab.com/mmsegmentation/v0.5/pretrain/swin/swin_base_patch4_window12_384_22k_20220317-e5c09f74.pth'  # noqa
+# noqa
 norm_cfg = dict(type='LN', requires_grad=True)
 backbone_norm_cfg = dict(type='SyncBN', requires_grad=True)
 model = dict(
@@ -16,8 +16,8 @@ model = dict(
         depth=101,
         num_stages=4,
         out_indices=(0, 1, 2, 3),
-        dilations=(1, 1, 1, 1),
-        strides=(1, 2, 2, 2),
+        dilations=(1, 1, 2, 4),
+        strides=(1, 2, 1, 1),
         norm_cfg=backbone_norm_cfg,
         norm_eval=False,
         style='pytorch',
@@ -93,4 +93,4 @@ lr_config = dict(
     by_epoch=False)
 
 # By default, models are trained on 8 GPUs with 2 images per GPU
-data = dict(samples_per_gpu=4)
+data = dict(samples_per_gpu=1)
