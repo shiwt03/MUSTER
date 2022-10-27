@@ -483,7 +483,7 @@ class SwinBlockSequence(BaseModule):
             self.blocks.append(block)
 
         if is_upsample:
-            self.deconv = nn.ConvTranspose2d(embed_dims, embed_dims // 2, 2)
+            self.deconv = nn.ConvTranspose2d(embed_dims, embed_dims // 2, 2, stride=2)
         else:
             self.conv = ConvModule(
                 in_channels=embed_dims,
