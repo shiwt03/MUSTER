@@ -3,7 +3,7 @@
 UperFormer: Full Transformer-based Networks for Semantic Segmentation
 
 UperFormer structure:
-<div align=center><img src="resources/ssformer.jpg"></div>
+<div align=center><img src=""></div>
 
 We use [MMSegmentation v0.29.0](https://github.com/open-mmlab/mmsegmentation/tree/v0.29.0) as the codebase.
 
@@ -73,7 +73,7 @@ to generate `**labelTrainIds.png`.
 python tools/convert_datasets/cityscapes.py data/cityscapes --nproc 8
 ```
 Part of UperFormer's segmentation results on Cityscapes:
-![image](resources/SSformer_Cityscapes.png)
+![image]()
 
 ### ADE20K
 
@@ -81,7 +81,7 @@ The training and validation set of ADE20K could be download from this [link](htt
 You may also download test set from [here](http://data.csail.mit.edu/places/ADEchallenge/release_test.zip).
 
 Part of UperFormer's segmentation results on ADE20K:
-![image](resources/SSformer_ADE20K.png)
+![image]()
 
 ## Evaluation
 
