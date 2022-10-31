@@ -8,9 +8,6 @@ The core codes can be found at:
 UperFormer/mmseg/models/decode_heads/UperFormer_head.py
 ```
 
-UperFormer structure:
-<div align=center><img src=""></div>
-
 We use [MMSegmentation v0.29.0](https://github.com/open-mmlab/mmsegmentation/tree/v0.29.0) as the codebase.
 
 ## Installation
@@ -29,8 +26,7 @@ mim install mmcv-full
 **Step 1.** Install UperFormer.
 
 ```shell
-git clone https://github.com/shiwt03/UperFormer.git
-cd mmsegmentation
+# The workdir of the terminal should be UperFormer/
 pip install -v -e .
 # "-v" means verbose, or more output
 # "-e" means installing a project in editable mode,
@@ -77,16 +73,11 @@ to generate `**labelTrainIds.png`.
 # --nproc means 8 process for conversion, which could be omitted as well.
 python tools/convert_datasets/cityscapes.py data/cityscapes --nproc 8
 ```
-Part of UperFormer's segmentation results on Cityscapes:
-![image]()
 
 ### ADE20K
 
 The training and validation set of ADE20K could be download from this [link](http://data.csail.mit.edu/places/ADEchallenge/ADEChallengeData2016.zip).
 You may also download test set from [here](http://data.csail.mit.edu/places/ADEchallenge/release_test.zip).
-
-Part of UperFormer's segmentation results on ADE20K:
-![image]()
 
 ## Evaluation
 
@@ -115,11 +106,3 @@ Example: train ```UperFormer``` with ```Swin Transformer``` on ```ADE20K```:
 # Single-gpu training
 python tools/train.py configs/UperFormer/_UperFormer_swin-base_ade20k_160k.py
 ```
-
-
-## License
-Please check the LICENSE file. 
-
-## Acknowledgment
-
-Thanks to previous open-sourced repo: [mmsegmentation](https://github.com/open-mmlab/mmsegmentation) [Swin-Transformer](https://github.com/microsoft/Swin-Transformer)
