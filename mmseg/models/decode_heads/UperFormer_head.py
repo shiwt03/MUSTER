@@ -90,22 +90,17 @@ class WindowMSA(BaseModule):
     def forward(self, x, skip_x, mask=None):
         """
         Args:
-
             x (tensor): input features with shape of (num_windows*B, N, C)
+            skip_x (tensor): input features with shape of (num_windows*B, N, C)
             mask (tensor | None, Optional): mask with shape of (num_windows,
                 Wh*Ww, Wh*Ww), value should be between (-inf, 0].
         """
         B, N, C = x.shape
         assert x.shape == skip_x.shape, 'x.shape != skip_x.shape in WindowMSA'
-        # print(x.shape)
-        # print(self.embed_dims)
-        # os.system("pause")
         qkv = self.qkv(x).reshape(B, N, 2, self.num_heads,
                                   C // self.num_heads).permute(2, 0, 3, 1, 4)
         skip_qkv = self.skip_qkv(skip_x).reshape(B, N, 1, self.num_heads,
                                             C // self.num_heads).permute(2, 0, 3, 1, 4)
-        # make torchscript happy (cannot use tensor as tuple)
-        # q, k, v = qkv[0], qkv[1], qkv[2]
         q, k, v = skip_qkv[0], qkv[0], qkv[1]
 
         q = q * self.scale
@@ -423,8 +418,6 @@ class SwinBlockSequence(BaseModule):
         attn_drop_rate (float, optional): Attention dropout rate. Default: 0.
         drop_path_rate (float | list[float], optional): Stochastic depth
             rate. Default: 0.
-        downsample (BaseModule | None, optional): The downsample operation
-            module. Default: None.
         act_cfg (dict, optional): The config dict of activation function.
             Default: dict(type='GELU').
         norm_cfg (dict, optional): The config dict of normalization.
@@ -434,6 +427,7 @@ class SwinBlockSequence(BaseModule):
             Default: False.
         init_cfg (dict | list | None, optional): The init config.
             Default: None.
+        is_upsample (bool): Whether to apply Fuse&Upsample block.
     """
 
     def __init__(self,
@@ -449,7 +443,6 @@ class SwinBlockSequence(BaseModule):
                  drop_path_rate=0.,
 
                  is_upsample=False,
-                 is_concat=True,
 
                  act_cfg=dict(type='GELU'),
                  norm_cfg=dict(type='LN'),
@@ -499,29 +492,14 @@ class SwinBlockSequence(BaseModule):
         if self.is_upsample:
             x = torch.cat([x, skip_x], dim=2)
             up_hw_shape = [hw_shape[0] * 2, hw_shape[1] * 2]
-            # print(x.shape)
-            # os.system("pause")
             B, HW, C = x.shape
             x = x.view(B, hw_shape[0], hw_shape[1], C)
             x = x.permute(0, 3, 1, 2)
-            '''
-            x_up = resize(
-                input=self.conv(x_up),
-                # size=inputs[0].shape[2:],
-                size=up_hw_shape,
-                # mode=self.interpolate_mode,
-                # align_corners=self.align_corners
-            )
-            '''
-            # x_up = self.conv(x_up)
-
             x = self.conv(x)
-
             x = self.ps(x)
             x = x.permute(0, 2, 3, 1).view(B, up_hw_shape[0] * up_hw_shape[1], C // 4)
             return x
         else:
-            # x_cat = torch.cat([x, skip_x], dim=2)
             x = torch.cat([x, skip_x], dim=2)
             B, HW, C = x.shape
             x = x.view(B, hw_shape[0], hw_shape[1], C).permute(0, 3, 1, 2)
@@ -569,10 +547,8 @@ class UperFormerHead(BaseDecodeHead):
         for i in range(num_layers):
             if i < num_layers - 1:
                 is_upsample = True
-                is_concat = True
             else:
                 is_upsample = False
-                is_concat = False
 
             stage = SwinBlockSequence(
                 embed_dims=in_channels,
@@ -587,7 +563,6 @@ class UperFormerHead(BaseDecodeHead):
                 drop_path_rate=dpr[sum(depths[:i]):sum(depths[:i + 1])],
 
                 is_upsample=is_upsample,
-                is_concat=is_concat,
 
                 act_cfg=act_cfg,
                 norm_cfg=norm_cfg,
@@ -648,7 +623,6 @@ class UperFormerHead(BaseDecodeHead):
             hw_shape = (hw_shape[0] * 2, hw_shape[1] * 2)
 
         out = x
-        # out = torch.cat([out, inputs[0]], dim=2)
         out = self.outffn(out)
         out = out.view(B, hw_shape[0] // 2, hw_shape[1] // 2, C * 4).permute(0, 3, 1, 2)
 

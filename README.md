@@ -2,6 +2,12 @@
 
 UperFormer: Full Transformer-based Networks for Semantic Segmentation
 
+The links below are all open source code and do not indicate authors' identities.
+The core codes can be found at:
+```
+UperFormer/mmseg/models/decode_heads/UperFormer_head.py
+```
+
 UperFormer structure:
 <div align=center><img src=""></div>
 
@@ -11,8 +17,7 @@ We use [MMSegmentation v0.29.0](https://github.com/open-mmlab/mmsegmentation/tre
 
 For install , please refer to the guidelines in [MMSegmentation v0.29.0](https://github.com/open-mmlab/mmsegmentation/blob/v0.29.0/docs/en/get_started.md#installation).
 
-An example (works for me): ```CUDA 11.6``` and  ```pytorch 1.12.1``` 
-### A from-scratch setup script
+An example (works for me): ```CUDA 11.6``` and  ```pytorch 1.12.1```
 
 **Step 0.** Install [MMCV](https://github.com/open-mmlab/mmcv) using [MIM](https://github.com/open-mmlab/mim).
 
@@ -21,10 +26,10 @@ pip install -U openmim
 mim install mmcv-full
 ```
 
-**Step 1.** Install MMSegmentation.
+**Step 1.** Install UperFormer.
 
 ```shell
-git clone https://github.com/open-mmlab/mmsegmentation.git
+git clone https://github.com/shiwt03/UperFormer.git
 cd mmsegmentation
 pip install -v -e .
 # "-v" means verbose, or more output
@@ -85,43 +90,32 @@ Part of UperFormer's segmentation results on ADE20K:
 
 ## Evaluation
 
-Download [trained weights]().
+Because of anonymity, we cannot give trained weights at present.
 
 ### ADE20K
 
-Example: evaluate ```UperFormer``` on ```ADE20K```:
+Example: evaluate ```UperFormer``` with ```Swin Transformer``` on ```ADE20K```:
 ```shell
 # Single-gpu testing
-python tools/test.py /path/to/config_file /path/to/checkpoint_file --show
+python tools/test.py configs/UperFormer/_UperFormer_swin-base_ade20k_160k.py /path/to/checkpoint_file --show
 ```
 
 ### Cityscapes
 
-Example: evaluate ```UperFormer``` on ```Cityscapes```:
+Example: evaluate ```UperFormer``` with ```Swin Transformer``` on ```Cityscapes```:
 ```shell
 # Single-gpu testing
-python tools/test.py /path/to/config_file /path/to/checkpoint_file --show
+python tools/test.py configs/UperFormer/_UperFormer_swin-base_ade20k_160k.py /path/to/checkpoint_file --show
 ```
 
 ## Training
-Download [weights](https://drive.google.com/drive/folders/1oZ4QO0sHhIymh4_8AHz29SXvyofkeIRh?usp=sharing) pretrained on ImageNet-22K, and put them in a folder ```pretrained/```.
 
-Example: train ```UperFormer``` on ```ADE20K```:
+Example: train ```UperFormer``` with ```Swin Transformer``` on ```ADE20K```:
 ```shell
 # Single-gpu training
-python tools/train.py /path/to/config_file
-```
-## Visualize
-Here is a demo script to test a single image. More details refer to [MMSegmentation's Doc](https://mmsegmentation.readthedocs.io/en/latest/get_started.html).
-```
-python demo/image_demo.py ${IMAGE_FILE} ${CONFIG_FILE} ${CHECKPOINT_FILE} [--device ${DEVICE_NAME}] [--palette-thr ${PALETTE}]
+python tools/train.py configs/UperFormer/_UperFormer_swin-base_ade20k_160k.py
 ```
 
-Example: visualize ```UperFormer``` on ```CityScapes```: 
-
-```shell
-coming soon...
-```
 
 ## License
 Please check the LICENSE file. 
