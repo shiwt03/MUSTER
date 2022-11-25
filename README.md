@@ -1,8 +1,7 @@
 # UperFormer
 
-UperFormer: Full Transformer-based Networks for Semantic Segmentation
+UperFormer: A Multi-scale Transformer-based Decoder for Semantic Segmentation
 
-The links below are all open source code and do not indicate authors' identities.
 The core codes can be found at:
 ```
 UperFormer/mmseg/models/decode_heads/UperFormer_head.py
@@ -106,3 +105,9 @@ Example: train ```UperFormer``` with ```Swin Transformer``` on ```ADE20K```:
 # Single-gpu training
 python tools/train.py configs/UperFormer/_UperFormer_swin-base_ade20k_160k.py
 ```
+
+## License
+Please check the LICENSE file.
+
+## Citation
+Please check ```CITATION.cff```.
