@@ -1,3 +1,4 @@
+import math
 import os
 
 import torch
@@ -61,70 +62,88 @@ class WindowMSA(BaseModule):
         self.embed_dims = embed_dims
         self.window_size = window_size  # Wh, Ww
         self.num_heads = num_heads
-        head_embed_dims = embed_dims // num_heads
-        self.scale = qk_scale or head_embed_dims ** -0.5
-
+        self.head_embed_dims = embed_dims // num_heads
+        # self.scale = qk_scale or head_embed_dims ** -0.5
         # define a parameter table of relative position bias
-        self.relative_position_bias_table = nn.Parameter(
-            torch.zeros((2 * window_size[0] - 1) * (2 * window_size[1] - 1),
-                        num_heads))  # 2*Wh-1 * 2*Ww-1, nH
+        # self.relative_position_bias_table = nn.Parameter(
+        #     torch.zeros((window_size[0] - 1) * (window_size[1] - 1),
+        #                 num_heads))  # 2*Wh-1 * 2*Ww-1, nH
 
         # About 2x faster than original impl
         Wh, Ww = self.window_size
-        rel_index_coords = self.double_step_seq(2 * Ww - 1, Wh, 1, Ww)
-        rel_position_index = rel_index_coords + rel_index_coords.T
-        rel_position_index = rel_position_index.flip(1).contiguous()
-        self.register_buffer('relative_position_index', rel_position_index)
-
-        self.qkv = nn.Linear(embed_dims, embed_dims * 2, bias=qkv_bias)
-        self.skip_qkv = nn.Linear(embed_dims, embed_dims, bias=qkv_bias)
+        # rel_index_coords = self.double_step_seq(2 * Ww - 1, Wh, 1, Ww)
+        # rel_position_index = rel_index_coords + rel_index_coords.T
+        # rel_position_index = rel_position_index.flip(1).contiguous()
+        # self.register_buffer('relative_position_index', rel_position_index)
+        self.dynamic_scale = nn.Parameter(torch.zeros(Wh*Ww, Wh*Ww//4))
+        self.fc_q = nn.Linear(embed_dims, embed_dims)
         self.attn_drop = nn.Dropout(attn_drop_rate)
         self.proj = nn.Linear(embed_dims, embed_dims)
         self.proj_drop = nn.Dropout(proj_drop_rate)
-
+        self.outer_bias = nn.Parameter(torch.zeros(num_heads, Wh*Ww, Wh*Ww//4))
+        self.inner_bias = nn.Parameter(torch.zeros(num_heads, Wh*Ww, Wh*Ww//4))
         self.softmax = nn.Softmax(dim=-1)
 
+        self.conv_downsampling = nn.Conv2d(in_channels=embed_dims, out_channels=embed_dims, kernel_size=2,
+                                           stride=2, groups=embed_dims)
+
     def init_weights(self):
-        trunc_normal_(self.relative_position_bias_table, std=0.02)
+        # trunc_normal_(self.relative_position_bias_table, std=0.02)
+        pass
 
     def forward(self, x, skip_x, mask=None):
         """
         Args:
+
             x (tensor): input features with shape of (num_windows*B, N, C)
-            skip_x (tensor): input features with shape of (num_windows*B, N, C)
             mask (tensor | None, Optional): mask with shape of (num_windows,
                 Wh*Ww, Wh*Ww), value should be between (-inf, 0].
         """
         B, N, C = x.shape
         assert x.shape == skip_x.shape, 'x.shape != skip_x.shape in WindowMSA'
-        qkv = self.qkv(x).reshape(B, N, 2, self.num_heads,
-                                  C // self.num_heads).permute(2, 0, 3, 1, 4)
-        skip_qkv = self.skip_qkv(skip_x).reshape(B, N, 1, self.num_heads,
-                                            C // self.num_heads).permute(2, 0, 3, 1, 4)
-        q, k, v = skip_qkv[0], qkv[0], qkv[1]
+        # print(x.shape)
+        # print(self.embed_dims)
+        # os.system("pause")
+        q = self.fc_q(skip_x)
+        q = q.reshape(B, N, self.num_heads, self.head_embed_dims).permute(0, 2, 1, 3)
 
-        q = q * self.scale
+        x = x.permute(0, 2, 1)
+        x = x.reshape(B, C, 12, 12)
+        x = self.conv_downsampling(x)
+        N = int(N // 4)
+        # print(x.shape)
+        x = x.reshape(B, C, N)
+        x = x.reshape(B, self.num_heads, self.head_embed_dims, N).permute(0, 1, 3, 2)
+        # print(x.shape)
+        # make torchscript happy (cannot use tensor as tuple)
+        # q, k, v = qkv[0], qkv[1], qkv[2]
+
+        # q = q * self.scale
+        k = v = x
         attn = (q @ k.transpose(-2, -1))
-
-        relative_position_bias = self.relative_position_bias_table[
-            self.relative_position_index.view(-1)].view(
-            self.window_size[0] * self.window_size[1],
-            self.window_size[0] * self.window_size[1],
-            -1)  # Wh*Ww,Wh*Ww,nH
-        relative_position_bias = relative_position_bias.permute(
-            2, 0, 1).contiguous()  # nH, Wh*Ww, Wh*Ww
-        attn = attn + relative_position_bias.unsqueeze(0)
-
+        # print(attn.shape)
+        # os.system("pause")
+        attn = attn * self.dynamic_scale
+        # relative_position_bias = self.relative_position_bias_table[
+        #     self.relative_position_index.view(-1)].view(
+        #     self.window_size[0] * self.window_size[1],
+        #     self.window_size[0] * self.window_size[1],
+        #     -1)  # Wh*Ww,Wh*Ww,nH
+        # relative_position_bias = relative_position_bias.permute(
+        #     2, 0, 1).contiguous()  # nH, Wh*Ww, Wh*Ww
+        # attn = attn + relative_position_bias.unsqueeze(0)
+        attn = attn + self.inner_bias
         if mask is not None:
-            nW = mask.shape[0]
-            attn = attn.view(B // nW, nW, self.num_heads, N,
-                             N) + mask.unsqueeze(1).unsqueeze(0)
-            attn = attn.view(-1, self.num_heads, N, N)
+            mask = mask.unsqueeze(1).unsqueeze(0)
+            mask = mask[:,:,:,:,::4]
+            nW = mask.shape[1]
+            attn = attn.view(B // nW, nW, self.num_heads, N*4,
+                             N) + mask
+            attn = attn.view(-1, self.num_heads, N*4, N)
         attn = self.softmax(attn)
-
+        attn = attn + self.outer_bias
         attn = self.attn_drop(attn)
-
-        x = (attn @ v).transpose(1, 2).reshape(B, N, C)
+        x = (attn @ v).transpose(1, 2).reshape(B, N*4, C)
         x = self.proj(x)
         x = self.proj_drop(x)
         return x
@@ -418,6 +437,8 @@ class SwinBlockSequence(BaseModule):
         attn_drop_rate (float, optional): Attention dropout rate. Default: 0.
         drop_path_rate (float | list[float], optional): Stochastic depth
             rate. Default: 0.
+        downsample (BaseModule | None, optional): The downsample operation
+            module. Default: None.
         act_cfg (dict, optional): The config dict of activation function.
             Default: dict(type='GELU').
         norm_cfg (dict, optional): The config dict of normalization.
@@ -427,7 +448,6 @@ class SwinBlockSequence(BaseModule):
             Default: False.
         init_cfg (dict | list | None, optional): The init config.
             Default: None.
-        is_upsample (bool): Whether to apply Fuse&Upsample block.
     """
 
     def __init__(self,
@@ -443,6 +463,7 @@ class SwinBlockSequence(BaseModule):
                  drop_path_rate=0.,
 
                  is_upsample=False,
+                 is_concat=True,
 
                  act_cfg=dict(type='GELU'),
                  norm_cfg=dict(type='LN'),
@@ -492,14 +513,29 @@ class SwinBlockSequence(BaseModule):
         if self.is_upsample:
             x = torch.cat([x, skip_x], dim=2)
             up_hw_shape = [hw_shape[0] * 2, hw_shape[1] * 2]
+            # print(x.shape)
+            # os.system("pause")
             B, HW, C = x.shape
             x = x.view(B, hw_shape[0], hw_shape[1], C)
             x = x.permute(0, 3, 1, 2)
+            '''
+            x_up = resize(
+                input=self.conv(x_up),
+                # size=inputs[0].shape[2:],
+                size=up_hw_shape,
+                # mode=self.interpolate_mode,
+                # align_corners=self.align_corners
+            )
+            '''
+            # x_up = self.conv(x_up)
+
             x = self.conv(x)
+
             x = self.ps(x)
             x = x.permute(0, 2, 3, 1).view(B, up_hw_shape[0] * up_hw_shape[1], C // 4)
             return x
         else:
+            # x_cat = torch.cat([x, skip_x], dim=2)
             x = torch.cat([x, skip_x], dim=2)
             B, HW, C = x.shape
             x = x.view(B, hw_shape[0], hw_shape[1], C).permute(0, 3, 1, 2)
@@ -509,7 +545,7 @@ class SwinBlockSequence(BaseModule):
 
 
 @HEADS.register_module()
-class UperFormerHead(BaseDecodeHead):
+class MusterHead_lsla_depth(BaseDecodeHead):
 
     def __init__(self,
                  embed_dims=768,
@@ -547,8 +583,10 @@ class UperFormerHead(BaseDecodeHead):
         for i in range(num_layers):
             if i < num_layers - 1:
                 is_upsample = True
+                is_concat = True
             else:
                 is_upsample = False
+                is_concat = False
 
             stage = SwinBlockSequence(
                 embed_dims=in_channels,
@@ -563,6 +601,7 @@ class UperFormerHead(BaseDecodeHead):
                 drop_path_rate=dpr[sum(depths[:i]):sum(depths[:i + 1])],
 
                 is_upsample=is_upsample,
+                is_concat=is_concat,
 
                 act_cfg=act_cfg,
                 norm_cfg=norm_cfg,
@@ -575,20 +614,19 @@ class UperFormerHead(BaseDecodeHead):
         self.num_features = [int(embed_dims * 2 ** i) for i in range(num_layers)]
         self.mlp_ratio = mlp_ratio
 
-        self.ffns = ModuleList()
-        self.norms = ModuleList()
-        for i in range(num_layers):
-            mlp = FFN(
-                embed_dims=in_channels,
-                feedforward_channels=int(self.mlp_ratio * in_channels),
-                num_fcs=2,
-                ffn_drop=drop_rate,
-                dropout_layer=dict(type='DropPath', drop_prob=drop_path_rate),
-                act_cfg=act_cfg,
-                add_identity=True,
-                init_cfg=None)
-            self.ffns.append(mlp)
-            in_channels *= 2
+        # self.ffns = ModuleList()
+        # for i in range(num_layers):
+        #     mlp = FFN(
+        #         embed_dims=in_channels,
+        #         feedforward_channels=int(self.mlp_ratio * in_channels),
+        #         num_fcs=2,
+        #         ffn_drop=drop_rate,
+        #         dropout_layer=dict(type='DropPath', drop_prob=drop_path_rate),
+        #         act_cfg=act_cfg,
+        #         add_identity=True,
+        #         init_cfg=None)
+        #     self.ffns.append(mlp)
+        #     in_channels *= 2
         self.outffn = FFN(
             embed_dims=self.channels,
             feedforward_channels=int(self.mlp_ratio * self.channels),
@@ -603,19 +641,24 @@ class UperFormerHead(BaseDecodeHead):
         # Receive 4 stage backbone feature map: 1/4, 1/8, 1/16, 1/32
         inputs = self._transform_inputs(inputs)
 
-        B, H, W, C = inputs[3].shape
+        B, C, H, W = inputs[3].shape
         hw_shape = (H, W)
         index = 0
-        for ffn in self.ffns:
-            ind = inputs[index]
-            ind = ind.permute(0, 2, 3, 1)
-            B, H, W, C = ind.shape
-            hw_shape = (H, W)
-            ind = ind.view(B, H * W, C)
-            ind = ffn(ind)
-            inputs[index] = ind
-            index += 1
-
+        # print(inputs[3].shape)
+        # for ffn in self.ffns:
+        #     ind = inputs[index]
+        #     ind = ind.permute(0, 2, 3, 1)
+        #     B, H, W, C = ind.shape
+        #     hw_shape = (H, W)
+        #     ind = ind.view(B, H * W, C)
+        #     ind = ffn(ind)
+        #     inputs[index] = ind
+        #     index += 1
+        for i, input in enumerate(inputs):
+            inputs[i] = inputs[i].permute(0, 2, 3, 1)
+            inputs[i] = inputs[i].reshape(inputs[i].shape[0], inputs[i].shape[1] * inputs[i].shape[2],
+                                          inputs[i].shape[3])
+        # print(inputs[3].shape)
         x = inputs[3]
         for i, stage in enumerate(self.stages):
             C //= 2
@@ -623,6 +666,7 @@ class UperFormerHead(BaseDecodeHead):
             hw_shape = (hw_shape[0] * 2, hw_shape[1] * 2)
 
         out = x
+        # out = torch.cat([out, inputs[0]], dim=2)
         out = self.outffn(out)
         out = out.view(B, hw_shape[0] // 2, hw_shape[1] // 2, C * 4).permute(0, 3, 1, 2)
 

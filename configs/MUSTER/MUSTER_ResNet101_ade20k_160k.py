@@ -1,39 +1,30 @@
 # model settings
 
 _base_ = [
-    '../_base_/models/UperFormer_swin.py', '../_base_/datasets/ade20k.py',
-    '../_base_/default_runtime.py', '../_base_/schedules/schedule_160k.py'
+    '../_base_/datasets/ade20k.py',
+    '../_base_/default_runtime.py',
+    '../_base_/schedules/schedule_160k.py'
 ]
-checkpoint_file = 'https://download.openmmlab.com/mmsegmentation/v0.5/pretrain/swin/swin_base_patch4_window12_384_22k_20220317-e5c09f74.pth'  # noqa
+# noqa
 norm_cfg = dict(type='LN', requires_grad=True)
-backbone_norm_cfg = dict(type='LN', requires_grad=True)
+backbone_norm_cfg = dict(type='SyncBN', requires_grad=True)
 model = dict(
     type='EncoderDecoder',
-    # pretrained=None,
+    pretrained='open-mmlab://resnet101_v1c',
     backbone=dict(
-        init_cfg=dict(type='Pretrained', checkpoint=checkpoint_file),
-        type='SwinTransformer',
-        pretrain_img_size=384,
-        embed_dims=128,
-        patch_size=4,
-        window_size=12,
-        mlp_ratio=4,
-        depths=[2, 2, 18, 2],
-        num_heads=[4, 8, 16, 32],
-        strides=(4, 2, 2, 2),
+        type='ResNetV1c',
+        depth=101,
+        num_stages=4,
         out_indices=(0, 1, 2, 3),
-        qkv_bias=True,
-        qk_scale=None,
-        patch_norm=True,
-        drop_rate=0.,
-        attn_drop_rate=0.,
-        drop_path_rate=0.3,
-        use_abs_pos_embed=False,
-        act_cfg=dict(type='GELU'),
-        norm_cfg=backbone_norm_cfg),
+        dilations=(1, 1, 1, 1),
+        strides=(1, 2, 2, 2),
+        norm_cfg=backbone_norm_cfg,
+        norm_eval=False,
+        style='pytorch',
+        contract_dilation=True),
     decode_head=dict(
-        type='UperFormerHead',
-        embed_dims=1024,
+        type='MusterHead',
+        embed_dims=2048,
         patch_size=4,
         window_size=12,
         mlp_ratio=4,
@@ -50,10 +41,10 @@ model = dict(
         # norm_cfg=dict(type='LN'),
         with_cp=False,
         init_cfg=None,
-        in_channels=[1024, 512, 256, 128],
+        in_channels=[2048, 1024, 512, 256],
         in_index=[0, 1, 2, 3],
         # pool_scales=(1, 2, 3, 6),
-        channels=256,
+        channels=512,
         # dropout_ratio=0.1,
         num_classes=150,
         norm_cfg=norm_cfg,
@@ -62,7 +53,7 @@ model = dict(
             type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0)),
     auxiliary_head=dict(
         type='FCNHead',
-        in_channels=512,
+        in_channels=1024,
         in_index=2,
         channels=256,
         num_convs=1,
@@ -102,4 +93,4 @@ lr_config = dict(
     by_epoch=False)
 
 # By default, models are trained on 8 GPUs with 2 images per GPU
-data = dict(samples_per_gpu=2)
+data = dict(samples_per_gpu=1)
