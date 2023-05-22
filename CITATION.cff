@@ -1,8 +1,8 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 authors:
-  - name: "Wentao Shi, Jing Xu, Pan Gao"
-title: "UperFormer: A Multi-scale Transformer-based Decoder for Semantic Segmentation"
+  - name: "Jing Xu, Wentao Shi, Pan Gao, Qizhu Li, Zhengwei Wang"
+title: "MUSTER: A Multi-scale Transformer-based Decoder for Semantic Segmentation"
 date-released: 2022-11-25
-url: "https://github.com/shiwt03/UperFormer"
+url: "https://github.com/shiwt03/MUSTER"
 license: Apache-2.0

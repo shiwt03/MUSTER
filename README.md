@@ -1,10 +1,10 @@
-# UperFormer
+# MUSTER
 
-UperFormer: A Multi-scale Transformer-based Decoder for Semantic Segmentation
+MUSTER: A Multi-scale Transformer-based Decoder for Semantic Segmentation
 
 The core codes can be found at:
 ```
-UperFormer/mmseg/models/decode_heads/UperFormer_head.py
+MUSTER/mmseg/models/decode_heads/MUSTER_head.py
 ```
 
 We use [MMSegmentation v0.29.0](https://github.com/open-mmlab/mmsegmentation/tree/v0.29.0) as the codebase.
@@ -22,10 +22,10 @@ pip install -U openmim
 mim install mmcv-full
 ```
 
-**Step 1.** Install UperFormer.
+**Step 1.** Install MUSTER.
 
 ```shell
-# The workdir of the terminal should be UperFormer/
+# The workdir of the terminal should be MUSTER/
 pip install -v -e .
 # "-v" means verbose, or more output
 # "-e" means installing a project in editable mode,
@@ -36,12 +36,12 @@ pip install -v -e .
 
 For dataset preparation, please refer to the guidelines in this [link](https://github.com/open-mmlab/mmsegmentation/blob/v0.29.0/docs/en/dataset_prepare.md#prepare-datasets).
 
-It is recommended to symlink the dataset root to `UperFormer/data`.
+It is recommended to symlink the dataset root to `MUSTER/data`.
 If your folder structure is different, you may need to change the corresponding paths in config files.
 
 The fold structure is recommended to be:
 ```none
-UperFormer
+MUSTER
 ├── data
 │   ├── cityscapes
 │   │   ├── leftImg8bit
@@ -84,26 +84,26 @@ Because of anonymity, we cannot give trained weights at present.
 
 ### ADE20K
 
-Example: evaluate ```UperFormer``` with ```Swin Transformer``` on ```ADE20K```:
+Example: evaluate ```MUSTER``` with ```Swin Transformer``` on ```ADE20K```:
 ```shell
 # Single-gpu testing
-python tools/test.py configs/UperFormer/_UperFormer_swin-base_ade20k_160k.py /path/to/checkpoint_file --show
+python tools/test.py configs/MUSTER/MUSTER_swin-base_ade20k_160k.py /path/to/checkpoint_file --show
 ```
 
 ### Cityscapes
 
-Example: evaluate ```UperFormer``` with ```Swin Transformer``` on ```Cityscapes```:
+Example: evaluate ```MUSTER``` with ```Swin Transformer``` on ```Cityscapes```:
 ```shell
 # Single-gpu testing
-python tools/test.py configs/UperFormer/_UperFormer_swin-base_ade20k_160k.py /path/to/checkpoint_file --show
+python tools/test.py configs/MUSTER/MUSTER_swin-base_ade20k_160k.py /path/to/checkpoint_file --show
 ```
 
 ## Training
 
-Example: train ```UperFormer``` with ```Swin Transformer``` on ```ADE20K```:
+Example: train ```MUSTER``` with ```Swin Transformer``` on ```ADE20K```:
 ```shell
 # Single-gpu training
-python tools/train.py configs/UperFormer/_UperFormer_swin-base_ade20k_160k.py
+python tools/train.py configs/MUSTER/MUSTER_swin-base_ade20k_160k.py
 ```
 
 ## License
